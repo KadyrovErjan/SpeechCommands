@@ -2,11 +2,13 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 import uvicorn
 import torch
 import torch.nn as nn
+from streamlit import audio_input
 from torchaudio import transforms
 import torch.nn.functional as F
 import io
 import soundfile as sf
-
+import streamlit as st
+from audio_recorder_streamlit import audio_recorder
 
 class CheckAudio(nn.Module):
     def __init__(self, num_classes=35):
@@ -67,31 +69,88 @@ def change_audio_format(waveform, sample_rate):
 
     return spec
 
-
 check_audio = FastAPI(title='Audio')
 
+# st.title('Model SPEECH COMMANDS')
+# st.text('Загрузите аудио файл')
+#
+# audio_file = st.file_uploader('Выбериту файл', type='wav')
+#
+# if not audio_file:
+#     st.warning('Загрузите .wav файл')
+# else:
+#     st.audio(audio_file)
+# if st.button('Распознать'):
+#         try:
+#             data =  audio_file.read()
+#
+#             wf, sr = sf.read(io.BytesIO(data), dtype='float32')
+#             wf = torch.tensor(wf).T
+#
+#             spec = change_audio_format(wf, sr).unsqueeze(0).to(device)
+#
+#             with torch.no_grad():
+#                 y_pred = model(spec)
+#                 pred_idx = torch.argmax(y_pred, dim=1).item()
+#                 pred_class = labels[pred_idx]
+#                 st.success({'Модель думает, что это команда': pred_class})
+#
+#         except Exception as e:
+#             st.exception(f'{e}')
 
-@check_audio.post('/predict/')
-async def predict(file: UploadFile = File(...)):
-    try:
-        data = await file.read()
-        if not data:
-            raise HTTPException(status_code=400, detail='Data not found')
+with st.sidebar:
+    st.header('Menu')
+    name = st.radio('Choose', ['Upload', 'Record'])
+if name == 'Upload':
+    st.title("🎧 Speech Commands")
+    st.text('Загрузите аудио файл')
 
-        wf, sr = sf.read(io.BytesIO(data), dtype='float32')
-        wf = torch.tensor(wf).T
+    audio_file = st.file_uploader('Выбериту файл', type='wav')
 
-        spec = change_audio_format(wf, sr).unsqueeze(0).to(device)
+    if not audio_file:
+        st.warning('Загрузите .wav файл')
+    else:
+        st.audio(audio_file)
+    if st.button('Распознать'):
+            try:
+                data =  audio_file.read()
 
-        with torch.no_grad():
-            y_pred = model(spec)
-            pred_idx = torch.argmax(y_pred, dim=1).item()
-            pred_class = labels[pred_idx]
-            return {'Class': pred_class}   # ✅ Исправлено
+                wf, sr = sf.read(io.BytesIO(data), dtype='float32')
+                wf = torch.tensor(wf).T
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {e}')
+                spec = change_audio_format(wf, sr).unsqueeze(0).to(device)
+
+                with torch.no_grad():
+                    y_pred = model(spec)
+                    pred_idx = torch.argmax(y_pred, dim=1).item()
+                    pred_class = labels[pred_idx]
+                    st.success({'Модель думает, что это команда': pred_class})
+
+            except Exception as e:
+                st.exception(f'{e}')
 
 
-if __name__ == '__main__':
-    uvicorn.run(check_audio, host='127.0.0.1', port=8000)
+if name == 'Record':
+    st.title("🎧 Speech Commands")
+    st.info(f'Скажи слово из этого списка: {labels}')
+
+    audio_record = st.audio_input('Скажите слово')
+
+    st.audio(audio_record)
+    if st.button('Распознать'):
+        try:
+            data = audio_record.read()
+
+            wf, sr = sf.read(io.BytesIO(data), dtype='float32')
+            wf = torch.tensor(wf).T
+
+            spec = change_audio_format(wf, sr).unsqueeze(0).to(device)
+
+            with torch.no_grad():
+                y_pred = model(spec)
+                pred_idx = torch.argmax(y_pred, dim=1).item()
+                pred_class = labels[pred_idx]
+                st.success({'Модель думает, что это команда': pred_class})
+
+        except Exception as e:
+            st.exception(f'{e}')
